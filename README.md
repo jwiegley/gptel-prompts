@@ -3,14 +3,16 @@
 This package offers an alternative way to manage your `gptel-directives`
 variable, using files rather than customizing the variable directly.
 
-Get started using the following configuration:
+You can get started using the following configuration:
 
 ```lisp
 (use-package gptel-prompts
   :after (gptel)
   :demand t
   :config
-  (gptel-prompts-update))
+  (gptel-prompts-update)
+  ;; Ensure prompts are updated if prompt files change
+  (gptel-prompts-add-update-watchers))
 ```
 
 Whenever your prompt files change, you must arrange for `gptel-prompts-update`

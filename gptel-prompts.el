@@ -185,4 +185,19 @@ Becomes:
 (defun gptel-prompts-add-current-time (_file)
   `(("current_time" . ,(format-time-string "%F %T"))))
 
+(defun gptel-prompts-add-update-watchers ()
+  "Watch all files in DIR and run CALLBACK when any is modified."
+  (let ((watches (list (file-notify-add-watch
+                        gptel-prompts-directory '(change)
+                        #'(lambda (&rest _events)
+                            (gptel-prompts-update))))))
+    (dolist (file (directory-files gptel-prompts-directory
+                                   t gptel-prompts-file-regexp))
+      (when (file-regular-p file)
+        (push (file-notify-add-watch file '(change)
+                                     #'(lambda (&rest _events)
+                                         (gptel-prompts-update)))
+              watches)))
+    watches))
+
 (provide 'gptel-prompts)
