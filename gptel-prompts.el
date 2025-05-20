@@ -27,6 +27,7 @@
 
 (require 'cl-lib)
 (require 'cl-macs)
+(require 'rx)
 (eval-when-compile
   (require 'cl))
 
@@ -50,7 +51,15 @@ to be represented as directives differently:
   :group 'gptel-prompts)
 
 (defcustom gptel-prompts-file-regexp
-  "\\.\\(txt\\|md\\|org\\|el\\|j\\(inja\\)?2?\\|poet\\)\\'"
+  (rx "." (group
+           (or "txt"
+               "md"
+               "org"
+               "el"
+               (seq "j" (optional "inja") (optional "2"))
+               "poet"
+               "json"))
+      string-end)
   "*Directory where GPTel prompts are defined, one per file.
 
 Note that files can be of different types, which will cause them
@@ -59,7 +68,8 @@ to be represented as directives differently:
   .txt, .md, .org    Purely textual prompts that are used as-is
   .el                Must be a Lisp list represent a conversation:
                        SYSTEM, USER, ASSISTANT, [USER, ASSISTANT, ...]
-  .poet              See https://github.com/character-ai/prompt-poet"
+  .poet              See https://github.com/character-ai/prompt-poet
+  .json              JSON list of role-assigned prompts"
   :type 'regexp
   :group 'gptel-prompts)
 
@@ -87,8 +97,8 @@ variable's documentation for the expected format."
   :type '(list function)
   :group 'gptel-prompts)
 
-(defun gptel-prompts-process-poet (prompts)
-  "Convert from a list of PROMPTS in Poet format, to GPTel.
+(defun gptel-prompts-process-prompts (prompts)
+  "Convert from a list of PROMPTS in dialog format, to GPTel.
 
 For example:
 
@@ -141,7 +151,7 @@ Becomes:
   (let ((vars (apply #'append
                      (mapcar #'(lambda (f) (funcall f file))
                              gptel-prompts-template-functions))))
-    (gptel-prompts-process-poet
+    (gptel-prompts-process-prompts
      (mapcar #'yaml--hash-table-to-alist
              (yaml-parse-string
               (templatel-render-string
@@ -161,7 +171,14 @@ Becomes:
              (if (listp lst)
                  lst
                (error "Emacs Lisp prompts must evaluate to a list")))))
-        ;; jww (2025-05-19): Support .json files directly
+        ((string-match "\\.json\\'" file)
+         (with-temp-buffer
+           (insert-file-contents file)
+           (goto-char (point-min))
+           (let ((conversation (json-read)))
+             (if (vectorp conversation)
+                 (gptel-prompts-process-prompts (seq-into conversation 'list))
+               (error "Emacs Lisp prompts must evaluate to a list")))))
         ((string-match "\\.\\(j\\(inja\\)?2?\\|poet\\)\\'" file)
          `(lambda () (gptel-prompts-poet ,file)))
         (t
