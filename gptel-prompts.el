@@ -217,4 +217,30 @@ Becomes:
               watches)))
     watches))
 
+(defvar gptel-prompts--project-conventions-alist nil
+  "Alist mapping projects to project conventions for LLMs.")
+
+(defun gptel-prompts-project-conventions ()
+  "System prompt is obtained from project CONVENTIONS.
+This function should be added to `gptel-directives'. To replace
+the default directive, use:
+
+  (setf (alist-get 'default gptel-directives)
+        #'gptel-project-conventions)"
+  (when-let ((root (project-root (project-current))))
+    (with-memoization
+        (alist-get root gptel-prompts--project-conventions-alist
+                   nil nil #'equal)
+      (let ((conven (file-name-concat root "CONVENTIONS.md"))
+            (claude (file-name-concat root "CLAUDE.md")))
+        (cond ((file-readable-p conven)
+               (with-temp-buffer
+                 (insert-file-contents conven)
+                 (buffer-string)))
+              ((file-readable-p claude)
+               (with-temp-buffer
+                 (insert-file-contents claude)
+                 (buffer-string)))
+              (t "Place your generic/fallback system message here."))))))
+
 (provide 'gptel-prompts)
