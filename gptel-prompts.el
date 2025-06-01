@@ -1,4 +1,4 @@
-;;; gptel-prompts --- Extra functions for use with gptel
+;;; gptel-prompts --- Extra functions for use with gptel -*- lexical-binding: t -*-
 
 ;; Copyright (C) 2025 John Wiegley
 
@@ -144,23 +144,38 @@ Becomes:
                  (pp-to-string prompt))))))
     (cons system (nreverse result))))
 
-(defun gptel-prompts-poet (file)
-  "Read Yaml + Jinja file in prompt-poet format."
+(defun gptel-prompts-interpolate (prompt)
+  "Expand Jinja-style references to `gptel-prompts-template-variables'.
+`gptel-prompts-template-functions' are called to add to this list as
+well, so some variables can be dynamic in nature."
   (require 'templatel)
-  (require 'yaml)
   (let ((vars (apply #'append
                      (mapcar #'(lambda (f) (funcall f file))
                              gptel-prompts-template-functions))))
-    (gptel-prompts-process-prompts
-     (mapcar #'yaml--hash-table-to-alist
-             (yaml-parse-string
-              (templatel-render-string
-               (with-temp-buffer
-                 (insert-file-contents file)
-                 (buffer-string))
-               (cl-remove-duplicates
-                (append vars gptel-prompts-template-variables)
-                :test #'string= :from-end t :key #'car)))))))
+    (templatel-render-string
+     prompt
+     (cl-remove-duplicates
+      (append vars gptel-prompts-template-variables)
+      :test #'string= :from-end t :key #'car))))
+
+(defun gptel-prompts-interpolate-buffer ()
+  "Expand Jinja-style references to `gptel-prompts-template-variables'.
+See `gptel-prompts-interpolate'.
+This function can be added to `gptel-prompt-transform-functions'."
+  (let ((replacement (gptel-prompts-interpolate (buffer-string))))
+    (delete-region (point-min) (point-max))
+    (insert replacement)))
+
+(defun gptel-prompts-poet (file)
+  "Read Yaml + Jinja file in prompt-poet format."
+  (require 'yaml)
+  (gptel-prompts-process-prompts
+   (mapcar #'yaml--hash-table-to-alist
+           (yaml-parse-string
+            (gptel-prompts-interpolate
+             (with-temp-buffer
+               (insert-file-contents file)
+               (buffer-string)))))))
 
 (defun gptel-prompts-process-file (file)
   (cond ((string-match "\\.el\\'" file)
@@ -180,7 +195,7 @@ Becomes:
                  (gptel-prompts-process-prompts (seq-into conversation 'list))
                (error "Emacs Lisp prompts must evaluate to a list")))))
         ((string-match "\\.\\(j\\(inja\\)?2?\\|poet\\)\\'" file)
-         `(lambda () (gptel-prompts-poet ,file)))
+         #'(lambda () (gptel-prompts-poet file)))
         (t
          (with-temp-buffer
            (insert-file-contents file)
