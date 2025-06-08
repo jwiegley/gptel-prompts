@@ -40,13 +40,9 @@
 (defcustom gptel-prompts-directory "~/.emacs.d/prompts"
   "*Directory where GPTel prompts are defined, one per file.
 
-Note that files can be of different types, which will cause them
-to be represented as directives differently:
-
-  .txt, .md, .org    Purely textual prompts that are used as-is
-  .el                Must be a Lisp list represent a conversation:
-                       SYSTEM, USER, ASSISTANT, [USER, ASSISTANT, ...]
-  .jinja, jinja2     A Jinja template supporting Emacs Lisp sexps"
+Note that files can be of different types, which will cause them to be
+represented as directives differently. See `gptel-prompts-file-regexp'
+for more information."
   :type 'file
   :group 'gptel-prompts)
 
@@ -55,6 +51,7 @@ to be represented as directives differently:
            (or "txt"
                "md"
                "org"
+               "eld"
                "el"
                (seq "j" (optional "inja") (optional "2"))
                "poet"
@@ -66,8 +63,9 @@ Note that files can be of different types, which will cause them
 to be represented as directives differently:
 
   .txt, .md, .org    Purely textual prompts that are used as-is
-  .el                Must be a Lisp list represent a conversation:
+  .eld               Must be a Lisp list represent a conversation:
                        SYSTEM, USER, ASSISTANT, [USER, ASSISTANT, ...]
+  .el                Must evaluate to a Lisp function
   .poet              See https://github.com/character-ai/prompt-poet
   .json              JSON list of role-assigned prompts"
   :type 'regexp
@@ -178,14 +176,24 @@ This function can be added to `gptel-prompt-transform-functions'."
                (buffer-string)))))))
 
 (defun gptel-prompts-process-file (file)
-  (cond ((string-match "\\.el\\'" file)
+  (cond ((string-match "\\.eld\\'" file)
          (with-temp-buffer
            (insert-file-contents file)
            (goto-char (point-min))
            (let ((lst (read (current-buffer))))
              (if (listp lst)
                  lst
-               (error "Emacs Lisp prompts must evaluate to a list")))))
+               (error "Emacs Lisp data prompts must evaluate to a list")))))
+        ((string-match "\\.el\\'" file)
+         (with-temp-buffer
+           (insert-file-contents file)
+           (goto-char (point-min))
+           (let ((func (read (current-buffer))))
+             (if (and (functionp func)
+                      (listp func)
+                      (eq 'lambda (car func)))
+                 func
+               (error "Emacs Lisp prompts must evaluate to a function/lambda")))))
         ((string-match "\\.json\\'" file)
          (with-temp-buffer
            (insert-file-contents file)
@@ -211,8 +219,11 @@ This function can be added to `gptel-prompt-transform-functions'."
 (defun gptel-prompts-update ()
   "Update `gptel-directives' from files in `gptel-prompts-directory'."
   (interactive)
-  (setq gptel-directives
-        (gptel-prompts-read-directory gptel-prompts-directory)))
+  (dolist (prompt
+           (gptel-prompts-read-directory gptel-prompts-directory))
+    (setq gptel-directives
+          (delq (car prompt) gptel-directives))
+    (add-to-list 'gptel-directives prompt)))
 
 (defun gptel-prompts-add-current-time (_file)
   `(("current_time" . ,(format-time-string "%F %T"))))
