@@ -142,7 +142,7 @@ Becomes:
                  (pp-to-string prompt))))))
     (cons system (nreverse result))))
 
-(defun gptel-prompts-interpolate (prompt)
+(defun gptel-prompts-interpolate (prompt &optional file)
   "Expand Jinja-style references to `gptel-prompts-template-variables'.
 `gptel-prompts-template-functions' are called to add to this list as
 well, so some variables can be dynamic in nature."
@@ -173,7 +173,8 @@ This function can be added to `gptel-prompt-transform-functions'."
             (gptel-prompts-interpolate
              (with-temp-buffer
                (insert-file-contents file)
-               (buffer-string)))))))
+               (buffer-string))
+             file)))))
 
 (defun gptel-prompts-process-file (file)
   (cond ((string-match "\\.eld\\'" file)
