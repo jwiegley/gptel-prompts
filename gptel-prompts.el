@@ -1,4 +1,4 @@
-;;; gptel-prompts --- Extra functions for use with gptel -*- lexical-binding: t -*-
+;;; gptel-prompts --- GPTel directive management using files -*- lexical-binding: t -*-
 
 ;; Copyright (C) 2025 John Wiegley
 
@@ -24,6 +24,58 @@
 ;; Boston, MA 02111-1307, USA.
 
 ;;; Commentary:
+
+;; This package provides enhanced prompt management capabilities for GPTel,
+;; allowing you to organize and dynamically load AI prompts from external
+;; files rather than hardcoding them in your Emacs configuration.
+
+;; Key Features:
+;;
+;; * Multi-format prompt support: Load prompts from .txt, .md, .org, .json,
+;;   .eld (Emacs Lisp data), .el (Emacs Lisp functions), and .poet/.jinja
+;;   (Prompt Poet/Jinja2 templates)
+;;
+;; * Template interpolation: Use Jinja2-style {{variable}} syntax with
+;;   customizable variables and dynamic functions
+;;
+;; * File watching: Automatically reload prompts when files change
+;;
+;; * Project-aware prompts: Automatically load project-specific conventions
+;;   from CONVENTIONS.md or CLAUDE.md files
+;;
+;; * Conversation format support: Handle multi-turn conversations with
+;;   system/user/assistant roles
+
+;; Setup:
+;;
+;;   (use-package gptel-prompts
+;;     :after (gptel)
+;;     :custom
+;;     (gptel-prompts-directory "~/my-prompts")
+;;     :config
+;;     (gptel-prompts-update)
+;;     ;; Optional: auto-reload on file changes
+;;     (gptel-prompts-add-update-watchers))
+
+;; File Formats:
+;;
+;; * Plain text (.txt, .md, .org): Used as-is for system prompts
+;; * JSON (.json): Array of {role: "system/user/assistant", content: "..."}
+;; * Emacs Lisp data (.eld): List format for conversations
+;; * Emacs Lisp code (.el): Lambda functions for dynamic prompts
+;; * Prompt Poet (.poet, .j2, .jinja, .jinja2): YAML + Jinja2 templates
+
+;; Template Variables:
+;;
+;; Use {{variable_name}} in your prompts. Variables can be defined in
+;; `gptel-prompts-template-variables' or generated dynamically by functions
+;; in `gptel-prompts-template-functions'.
+
+;; Project Integration:
+;;
+;; Add `gptel-prompts-project-conventions' to `gptel-directives' to
+;; automatically load project-specific prompts from CONVENTIONS.md or
+;; CLAUDE.md files in your project root.
 
 ;;; Code:
 
@@ -87,10 +139,10 @@ prompt template."
   "*Set of functions run when a template prompt is used.
 
 These are called when the template is going to be used by
-`gptel-request'. Each function receives the name of the template
-file, and must return either `nil' or an alist of variable values
-to prepend to `gptel-prompts-template-variables'. See that
-variable's documentation for the expected format."
+`gptel-request'. Each function receives the name of the template file,
+and must return either nil or an alist of variable values to prepend to
+`gptel-prompts-template-variables'. See that variable's documentation
+for the expected format."
   :type '(list function)
   :group 'gptel-prompts)
 
@@ -136,13 +188,14 @@ Becomes:
           (setq result (cons (list 'response content) result)))
          ((string= role "tool")
           (error "Tools not yet supported in Poet prompts"))
-         (otherwise
+         (t
           (error "Role not recognized in prompt: %s"
                  (pp-to-string prompt))))))
     (cons system (nreverse result))))
 
 (defun gptel-prompts-interpolate (prompt &optional file)
   "Expand Jinja-style references to `gptel-prompts-template-variables'.
+The references are expected in the string PROMPT, possibly from FILE.
 `gptel-prompts-template-functions' are called to add to this list as
 well, so some variables can be dynamic in nature."
   (require 'templatel)
@@ -164,7 +217,7 @@ This function can be added to `gptel-prompt-transform-functions'."
     (insert replacement)))
 
 (defun gptel-prompts-poet (file)
-  "Read Yaml + Jinja file in prompt-poet format."
+  "Read Yaml + Jinja FILE in prompt-poet format."
   (require 'yaml)
   (gptel-prompts-process-prompts
    (mapcar #'yaml--hash-table-to-alist
@@ -176,6 +229,22 @@ This function can be added to `gptel-prompt-transform-functions'."
              file)))))
 
 (defun gptel-prompts-process-file (file)
+  "Process FILE and return appropriate content.
+
+FILE is a string path to the file to be processed.
+
+Handles different file types based on extension:
+- .eld files: Read as Emacs Lisp data, must evaluate to a list
+- .el files: Read as Emacs Lisp code, must evaluate to a function/lambda
+- .json files: Parse as JSON array and process as prompts via
+  `gptel-prompts-process-prompts'
+- .j2/.jinja/.jinja2/.poet files: Return lambda that calls
+  `gptel-prompts-poet' with FILE
+- Other files: Return trimmed file contents as plain text string
+
+Returns the processed content in the appropriate format for each file
+type. Signals an error if the file content doesn't match expected format
+for typed files."
   (cond ((string-match "\\.eld\\'" file)
          (with-temp-buffer
            (insert-file-contents file)
@@ -219,14 +288,14 @@ This function can be added to `gptel-prompt-transform-functions'."
 (defun gptel-prompts-update ()
   "Update `gptel-directives' from files in `gptel-prompts-directory'."
   (interactive)
-  (dolist (prompt
-           (gptel-prompts-read-directory gptel-prompts-directory))
+  (dolist (prompt (gptel-prompts-read-directory gptel-prompts-directory))
     (setq gptel-directives
           (cl-delete-if #'(lambda (x) (eq (car x) (car prompt)))
                         gptel-directives))
     (add-to-list 'gptel-directives prompt)))
 
 (defun gptel-prompts-add-current-time (_file)
+  "Add the current time as a variable for Poet interpolation."
   `(("current_time" . ,(format-time-string "%F %T"))))
 
 (defun gptel-prompts-add-update-watchers ()
@@ -271,3 +340,5 @@ the default directive, use:
               (t "Place your generic/fallback system message here."))))))
 
 (provide 'gptel-prompts)
+
+;;; gptel-prompts.el ends here
