@@ -30,9 +30,6 @@
 (require 'cl-lib)
 (require 'cl-macs)
 (require 'rx)
-(eval-when-compile
-  (require 'cl))
-
 (require 'gptel)
 
 (defgroup gptel-prompts nil
@@ -206,7 +203,7 @@ This function can be added to `gptel-prompt-transform-functions'."
                  (gptel-prompts-process-prompts (seq-into conversation 'list))
                (error "Emacs Lisp prompts must evaluate to a list")))))
         ((string-match "\\.\\(j\\(inja\\)?2?\\|poet\\)\\'" file)
-         #'(lambda () (gptel-prompts-poet file)))
+         `(lambda () (gptel-prompts-poet ,file)))
         (t
          (with-temp-buffer
            (insert-file-contents file)
@@ -225,7 +222,8 @@ This function can be added to `gptel-prompt-transform-functions'."
   (dolist (prompt
            (gptel-prompts-read-directory gptel-prompts-directory))
     (setq gptel-directives
-          (delq (car prompt) gptel-directives))
+          (cl-delete-if #'(lambda (x) (eq (car x) (car prompt)))
+                        gptel-directives))
     (add-to-list 'gptel-directives prompt)))
 
 (defun gptel-prompts-add-current-time (_file)
