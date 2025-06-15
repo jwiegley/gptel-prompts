@@ -5,8 +5,13 @@
 ;; Author: John Wiegley <johnw@gnu.org>
 ;; Created: 19 May 2025
 ;; Version: 1.0
-;; Keywords: ai gptel tools
+;; Keywords: ai gptel prompts
 ;; X-URL: https://github.com/jwiegley/dot-emacs
+;; Package-Requires: ((emacs "24.1"))
+
+;; This file is NOT part of GNU Emacs.
+
+;;; License:
 
 ;; This program is free software; you can redistribute it and/or
 ;; modify it under the terms of the GNU General Public License as
@@ -82,6 +87,7 @@
 (require 'cl-lib)
 (require 'cl-macs)
 (require 'rx)
+(require 'filenotify)
 (require 'gptel)
 
 (defgroup gptel-prompts nil
@@ -321,8 +327,8 @@ for typed files."
 This function should be added to `gptel-directives'. To replace
 the default directive, use:
 
-  (setf (alist-get 'default gptel-directives)
-        #'gptel-project-conventions)"
+  (setf (alist-get \\'default gptel-directives)
+        #\\'gptel-project-conventions)"
   (when-let ((root (project-root (project-current))))
     (with-memoization
         (alist-get root gptel-prompts--project-conventions-alist
