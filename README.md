@@ -37,10 +37,10 @@ documentation of that variable for more information.
 
 ### Prompt Poet templates
 
-Based on the standard set by [Prompt
-Poet](https://github.com/character-ai/prompt-poet), files ending in `.poet` or
-`.jinja` will be interpreted as YAML files using Jinja templating. The
-templating is applied first, before it is parsed as a Yaml file.
+Based on the standard set by [Prompt Poet](https://github.com/character-ai/prompt-poet),
+files ending in `.poet` or `.jinja` will be interpreted as YAML files using
+Jinja templating. The templating is applied first, before it is parsed as a
+Yaml file.
 
 This is done dynamically, at the time the prompt is used, so you can see the
 results of your expansion using GPTel’s Inspect capabilities when
@@ -67,3 +67,7 @@ prompt.:
 Note the `>-` and `|` content directives, which are used to manage when and
 where newlines appear in the actual prompts, while allowing the file itself to
 use what is easiest to maintain in the editor.
+
+NOTE: If you wish to use the Prompt Poet format, you will need to install the
+Emacs dependencies [yaml](https://elpa.gnu.org/packages/yaml.html) and
+[templatel](https://github.com/emacs-love/templatel).

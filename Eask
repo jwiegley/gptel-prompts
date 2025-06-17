@@ -15,3 +15,6 @@
 (source "melpa")
 
 (depends-on "emacs" "24.1")
+(depends-on "gptel" "0.9.8.5")
+(depends-on "yaml")
+(depends-on "templatel")
