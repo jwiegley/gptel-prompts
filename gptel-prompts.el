@@ -1,4 +1,4 @@
-;;; gptel-prompts --- GPTel directive management using files -*- lexical-binding: t -*-
+;;; gptel-prompts.el --- GPTel directive management using files -*- lexical-binding: t -*-
 
 ;; Copyright (C) 2025 John Wiegley
 
