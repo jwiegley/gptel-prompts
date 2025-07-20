@@ -324,7 +324,9 @@ for typed files."
 
 (defcustom gptel-prompts-project-files
   '("CONVENTIONS.md"
-    "CLAUDE.md")
+    "CLAUDE.md"
+    ".github/copilot-instructions.md"
+    ".instructions.md")
   "A list of files to be used as prompts for the current project.
 The first file found in the list for a given project is used, with the
 rest ignored."
