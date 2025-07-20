@@ -322,6 +322,15 @@ for typed files."
 (defvar gptel-prompts--project-conventions-alist nil
   "Alist mapping projects to project conventions for LLMs.")
 
+(defcustom gptel-prompts-project-files
+  '("CONVENTIONS.md"
+    "CLAUDE.md")
+  "A list of files to be used as prompts for the current project.
+The first file found in the list for a given project is used, with the
+rest ignored."
+  :type '(repeat file)
+  :group 'gptel-prompts)
+
 (defun gptel-prompts-project-conventions ()
   "System prompt is obtained from project CONVENTIONS.
 This function should be added to `gptel-directives'. To replace
@@ -333,17 +342,14 @@ the default directive, use:
     (with-memoization
         (alist-get root gptel-prompts--project-conventions-alist
                    nil nil #'equal)
-      (let ((conven (file-name-concat root "CONVENTIONS.md"))
-            (claude (file-name-concat root "CLAUDE.md")))
-        (cond ((file-readable-p conven)
-               (with-temp-buffer
-                 (insert-file-contents conven)
-                 (buffer-string)))
-              ((file-readable-p claude)
-               (with-temp-buffer
-                 (insert-file-contents claude)
-                 (buffer-string)))
-              (t "Place your generic/fallback system message here."))))))
+      (or (cl-loop for file in gptel-prompts-project-files
+                   for path = (expand-file-name file root)
+                   when (file-readable-p path)
+                   do (return
+                       (with-temp-buffer
+                         (insert-file-contents path)
+                         (buffer-string))))
+          "You are a helpful assistant. Respond concisely."))))
 
 (provide 'gptel-prompts)
 
