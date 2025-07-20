@@ -347,10 +347,9 @@ the default directive, use:
       (or (cl-loop for file in gptel-prompts-project-files
                    for path = (expand-file-name file root)
                    when (file-readable-p path)
-                   do (return
-                       (with-temp-buffer
-                         (insert-file-contents path)
-                         (buffer-string))))
+                   return (with-temp-buffer
+                            (insert-file-contents path)
+                            (buffer-string)))
           "You are a helpful assistant. Respond concisely."))))
 
 (provide 'gptel-prompts)
