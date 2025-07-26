@@ -340,7 +340,8 @@ the default directive, use:
 
   (setf (alist-get \\'default gptel-directives)
         #\\'gptel-project-conventions)"
-  (when-let ((root (project-root (project-current))))
+  (when-let* ((project (project-current))
+              (root (project-root project)))
     (with-memoization
         (alist-get root gptel-prompts--project-conventions-alist
                    nil nil #'equal)
