@@ -327,10 +327,11 @@ for typed files."
     "CLAUDE.md"
     ".github/copilot-instructions.md"
     ".instructions.md")
-  "A list of files to be used as prompts for the current project.
-The first file found in the list for a given project is used, with the
-rest ignored."
-  :type '(repeat file)
+  "A list of files or directories with prompts for the current project.
+The first file or directory found in the list for a given project is used,
+with the rest ignored. If a directory is specified, all files within it
+will be aggregated into a single prompt."
+  :type '(repeat (choice file directory))
   :group 'gptel-prompts)
 
 (defun gptel-prompts-project-conventions ()
@@ -345,12 +346,26 @@ the default directive, use:
     (with-memoization
         (alist-get root gptel-prompts--project-conventions-alist
                    nil nil #'equal)
-      (or (cl-loop for file in gptel-prompts-project-files
-                   for path = (expand-file-name file root)
-                   when (file-readable-p path)
-                   return (with-temp-buffer
-                            (insert-file-contents path)
-                            (buffer-string)))
+      (or (cl-loop
+           for item in gptel-prompts-project-files
+           for path = (expand-file-name item root)
+           when (file-readable-p path)
+           return (if (file-directory-p path)
+                      (let ((contents
+                             (mapconcat
+                              (lambda (file)
+                                (when (and (file-regular-p file)
+                                           (file-readable-p file))
+                                  (with-temp-buffer
+                                    (insert-file-contents file)
+                                    (buffer-string))))
+                              (directory-files path t "^[^.].*\\.md$" t)
+                              "\n\n")))
+                        (unless (string-empty-p contents)
+                          contents))
+                    (with-temp-buffer
+                      (insert-file-contents path)
+                      (buffer-string))))
           "You are a helpful assistant. Respond concisely."))))
 
 (provide 'gptel-prompts)
