@@ -325,14 +325,61 @@ for typed files."
 (defcustom gptel-prompts-project-files
   '("CONVENTIONS.md"
     "CLAUDE.md"
-    ".github/copilot-instructions.md"
+    (".github" . "copilot-instructions\\.md")
+    (".instructions.d" . "^.*\\.md$")
     ".instructions.md")
   "A list of files or directories with prompts for the current project.
-The first file or directory found in the list for a given project is used,
-with the rest ignored. If a directory is specified, all files within it
-will be aggregated into a single prompt."
-  :type '(repeat (choice file directory))
+Entries can be strings (file/directory names) or cons cells where the
+CAR is a directory path and the CDR is either a regexp string or a
+filter function for selecting which files in that directory should be
+chosen.
+
+The first matching rule in the list for a given project is used, with
+the rest ignored.
+
+If a directory is specified without a filter (as a plain string), all
+markdown files within it will be aggregated into a single prompt."
+  :type '(repeat (choice file directory
+                         (cons directory (choice regexp function))))
   :group 'gptel-prompts)
+
+(defun gptel-prompts--read-directory-filtered (dir regexp-or-function)
+  "Read files from DIR for which REGEXP-OR-FUNCTION is a match."
+  (let ((files
+         (cl-remove-if-not
+          (cond
+           ((functionp regexp-or-function)
+            (lambda (f)
+              (funcall regexp-or-function (file-name-nondirectory f))))
+           ((stringp regexp-or-function)
+            (lambda (f)
+              (string-match-p regexp-or-function (file-name-nondirectory f))))
+           (t (error "Invalid filter: %s" regexp-or-function)))
+          (directory-files dir t "^[^.].*" t))))
+    (unless (null files)
+      (mapconcat
+       (lambda (file)
+         (when (and (file-regular-p file)
+                    (file-readable-p file))
+           (with-temp-buffer
+             (insert-file-contents file)
+             (buffer-string))))
+       files "\n\n"))))
+
+(defun gptel-prompts--read-directory (dir)
+  "Read all Markdown files from DIR, concated together."
+  (let ((contents
+         (mapconcat
+          (lambda (file)
+            (when (and (file-regular-p file)
+                       (file-readable-p file))
+              (with-temp-buffer
+                (insert-file-contents file)
+                (buffer-string))))
+          (directory-files dir t "^[^.].*\\.md$" t)
+          "\n\n")))
+    (unless (string-empty-p contents)
+      contents)))
 
 (defun gptel-prompts-project-conventions ()
   "System prompt is obtained from project CONVENTIONS.
@@ -348,24 +395,19 @@ the default directive, use:
                    nil nil #'equal)
       (or (cl-loop
            for item in gptel-prompts-project-files
-           for path = (expand-file-name item root)
+           for path = (expand-file-name
+                       (if (consp item) (car item) item)
+                       root)
            when (file-readable-p path)
-           return (if (file-directory-p path)
-                      (let ((contents
-                             (mapconcat
-                              (lambda (file)
-                                (when (and (file-regular-p file)
-                                           (file-readable-p file))
-                                  (with-temp-buffer
-                                    (insert-file-contents file)
-                                    (buffer-string))))
-                              (directory-files path t "^[^.].*\\.md$" t)
-                              "\n\n")))
-                        (unless (string-empty-p contents)
-                          contents))
+           return (cond
+                   ((consp item)
+                    (gptel-prompts--read-directory-filtered (car item) (cdr item)))
+                   ((file-directory-p path)
+                    (gptel-prompts--read-directory path))
+                   (t
                     (with-temp-buffer
                       (insert-file-contents path)
-                      (buffer-string))))
+                      (buffer-string)))))
           "You are a helpful assistant. Respond concisely."))))
 
 (provide 'gptel-prompts)
