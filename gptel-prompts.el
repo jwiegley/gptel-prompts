@@ -345,26 +345,28 @@ markdown files within it will be aggregated into a single prompt."
 
 (defun gptel-prompts--read-directory-filtered (dir regexp-or-function)
   "Read files from DIR for which REGEXP-OR-FUNCTION is a match."
-  (let ((files
-         (cl-remove-if-not
-          (cond
-           ((functionp regexp-or-function)
-            (lambda (f)
-              (funcall regexp-or-function (file-name-nondirectory f))))
-           ((stringp regexp-or-function)
-            (lambda (f)
-              (string-match-p regexp-or-function (file-name-nondirectory f))))
-           (t (error "Invalid filter: %s" regexp-or-function)))
-          (directory-files dir t "^[^.].*" t))))
-    (unless (null files)
-      (mapconcat
-       (lambda (file)
-         (when (and (file-regular-p file)
-                    (file-readable-p file))
-           (with-temp-buffer
-             (insert-file-contents file)
-             (buffer-string))))
-       files "\n\n"))))
+  (when (and (file-directory-p dir)
+             (file-readable-p dir))
+    (let ((files
+           (cl-remove-if-not
+            (cond
+             ((functionp regexp-or-function)
+              (lambda (f)
+                (funcall regexp-or-function (file-name-nondirectory f))))
+             ((stringp regexp-or-function)
+              (lambda (f)
+                (string-match-p regexp-or-function (file-name-nondirectory f))))
+             (t (error "Invalid filter: %s" regexp-or-function)))
+            (directory-files dir t "^[^.].*" t))))
+      (unless (null files)
+        (mapconcat
+         (lambda (file)
+           (when (and (file-regular-p file)
+                      (file-readable-p file))
+             (with-temp-buffer
+               (insert-file-contents file)
+               (buffer-string))))
+         files "\n\n")))))
 
 (defun gptel-prompts--read-directory (dir)
   "Read all Markdown files from DIR, concated together."
