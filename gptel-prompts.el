@@ -325,6 +325,7 @@ for typed files."
 (defcustom gptel-prompts-project-files
   '("CONVENTIONS.md"
     "CLAUDE.md"
+    "AGENTS.md"
     (".github" . "copilot-instructions\\.md")
     (".instructions.d" . "^.*\\.md$")
     ".instructions.md")
