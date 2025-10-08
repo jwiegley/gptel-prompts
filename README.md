@@ -40,7 +40,7 @@ documentation of that variable for more information.
 Based on the standard set by [Prompt Poet](https://github.com/character-ai/prompt-poet),
 files ending in `.poet` or `.jinja` will be interpreted as YAML files using
 Jinja templating. The templating is applied first, before it is parsed as a
-Yaml file.
+YAML file.
 
 This is done dynamically, at the time the prompt is used, so you can see the
 results of your expansion using GPTel’s Inspect capabilities when
@@ -71,3 +71,51 @@ use what is easiest to maintain in the editor.
 NOTE: If you wish to use the Prompt Poet format, you will need to install the
 Emacs dependencies [yaml](https://elpa.gnu.org/packages/yaml.html) and
 [templatel](https://github.com/emacs-love/templatel).
+
+Using `templatel` template inheritance with `extends` and `block` requires
+creating a base template that generates a valid YAML file. Block statements on
+child templates should be written so that YAML indentation is not broken,
+otherwise a YAML parse error is raised.
+
+Extending the `templatel` environment is provided by customizing the variable
+`gptel-prompts-template-env-prepare-functions` with a list of functions, each
+function receives the `templatel` environment. Here is an example of adding a
+`templatel` filter named `nindent` which indents the string according to the
+provided number of characters `n`, similar to the Helm chart `nindent` filter.
+
+```elisp
+(defun my/templatel-filter-nindent (s n)
+  "Adds `n' spaces after each newline character."
+  (let ((indent-string (make-string n ? )))
+    (replace-regexp-in-string "\n" (concat "\n" indent-string) s)))
+
+(defun my/prepare-gptel-prompts-templatel-env (env)
+  (templatel-env-add-filter env "nindent" #'my/templatel-filter-nindent))
+
+(setopt gptel-prompts-template-env-prepare-functions
+  (list #'my/prepare-gptel-prompts-templatel-env))
+```
+
+Example usage:
+
+base.md:
+
+```yaml
+- role: system
+  content: >-
+    base for prompt
+    {% block content %}{% endblock %}
+```
+
+test.poet:
+
+```
+{% extends "base.md" %}
+
+{% block content %}{{ "hello
+
+world some
+prompt text here
+
+" | nindent(4) }}{% endblock %}
+```

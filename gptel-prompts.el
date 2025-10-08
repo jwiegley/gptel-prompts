@@ -153,13 +153,21 @@ for the expected format."
   :group 'gptel-prompts)
 
 (defcustom gptel-prompts-template-base-directory nil
-  "*Base directory for resolving inherited files referenced in prompts.
-When non-nil, this directory will be used with `expand-file-name'
-to resolve relative template paths referenced in prompts.  When nil,
+  "Base directory for resolving inherited files referenced in prompts.
+Accepts either a string directory expanded with `expand-file-name'
+to resolve relative template paths referenced in prompts, or a function
+that receives a prompt and a file and returns a directory.  When nil,
 inherited file resolution will default to the directory containing
 the prompt file being interpolated."
   :type '(choice (const :tag "Use prompt file directory" nil)
-                 (directory :tag "Custom base directory"))
+                 (directory :tag "Custom base directory")
+                 (function :tag "Function that returns base directory"))
+  :group 'gptel-prompts)
+
+(defcustom gptel-prompts-template-env-prepare-functions '()
+  "Optional function for preparing the `templatel' environment.
+Used for adding `templatel' filters and tests."
+  :type '(list function)
   :group 'gptel-prompts)
 
 (defun gptel-prompts-process-prompts (prompts)
@@ -224,19 +232,27 @@ resolving template paths with `expand-file-name'."
                     (append vars gptel-prompts-template-variables)
                     :test #'string= :from-end t :key #'car))
          ;; Determine base directory for template resolution
-         (base-dir (or gptel-prompts-template-base-directory
-                       (when file (file-name-directory file))
-                       default-directory))
+         (base-dir (or
+                    (or
+                     (and (functionp gptel-prompts-template-base-directory)
+                          (funcall gptel-prompts-template-base-directory
+                                   prompt file))
+                     gptel-prompts-template-base-directory)
+                    (when file (file-name-directory file))
+                    default-directory))
          ;; Create environment with importfn
          (env (templatel-env-new
                :importfn (lambda (environment name)
-                          (let ((template-path (expand-file-name name base-dir)))
-                            (when (file-readable-p template-path)
-                              (templatel-env-add-template
-                               environment name
-                               (templatel-new-from-file template-path))))))))
+                           (let ((template-path (expand-file-name name base-dir)))
+                             (when (file-readable-p template-path)
+                               (templatel-env-add-template
+                                environment name
+                                (templatel-new-from-file template-path))))))))
     ;; Add the main template to the environment and render it
     (templatel-env-add-template env "main" (templatel-new prompt))
+    (when gptel-prompts-template-env-prepare-functions
+      (mapcar #'(lambda (f) (funcall f env))
+              gptel-prompts-template-env-prepare-functions))
     (templatel-env-render env "main" all-vars)))
 
 (defun gptel-prompts-interpolate-buffer ()
