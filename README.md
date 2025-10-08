@@ -72,6 +72,8 @@ NOTE: If you wish to use the Prompt Poet format, you will need to install the
 Emacs dependencies [yaml](https://elpa.gnu.org/packages/yaml.html) and
 [templatel](https://github.com/emacs-love/templatel).
 
+#### Using `templatel` Template Inheritance
+
 Using `templatel` template inheritance with `extends` and `block` requires
 creating a base template that generates a valid YAML file. Block statements on
 child templates should be written so that YAML indentation is not broken,
