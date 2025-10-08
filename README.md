@@ -77,6 +77,13 @@ creating a base template that generates a valid YAML file. Block statements on
 child templates should be written so that YAML indentation is not broken,
 otherwise a YAML parse error is raised.
 
+Template inheritance base directory can be customized using the custom variable
+`gptel-prompts-template-base-directory` which accepts either a directory or a
+function that returns a directory, defaulting to either the prompt poet file
+directory or `default-directory`.
+
+#### Extending Templatel Environment
+
 Extending the `templatel` environment is provided by customizing the variable
 `gptel-prompts-template-env-prepare-functions` with a list of functions, each
 function receives the `templatel` environment. Here is an example of adding a
