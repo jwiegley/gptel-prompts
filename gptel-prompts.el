@@ -164,10 +164,15 @@ the prompt file being interpolated."
                  (function :tag "Function that returns base directory"))
   :group 'gptel-prompts)
 
-(defcustom gptel-prompts-template-env-prepare-functions '()
-  "Optional function for preparing the `templatel' environment.
-Used for adding `templatel' filters and tests."
+(defcustom gptel-prompts-prepare-template-env-functions '()
+  "Hook for preparing the `templatel' environment before interpolation.
+Can be used for adding `templatel' filters and tests."
   :type '(list function)
+  :group 'gptel-prompts)
+
+(defcustom gptel-prompts-get-template-env-function #'gptel-prompts--prepare-template-env
+  "Return a `templatel' environment to be used for interpolation."
+  :type 'function
   :group 'gptel-prompts)
 
 (defun gptel-prompts-process-prompts (prompts)
@@ -217,22 +222,15 @@ Becomes:
                  (pp-to-string prompt))))))
     (cons system (nreverse result))))
 
-(defun gptel-prompts-interpolate (prompt &optional file)
-  "Expand Jinja-style references using a full templatel environment.
-Creates a template environment with support for file inclusion and
-inheritance.  When `gptel-prompts-template-base-directory' is nil,
-uses the directory of the PROMPT file being interpolated for
-resolving template paths with `expand-file-name'."
-  (require 'templatel)
-  ;; Gather variables from template functions
-  (let* ((vars (apply #'append
-                      (mapcar #'(lambda (f) (funcall f file))
-                              gptel-prompts-template-functions)))
-         (all-vars (cl-remove-duplicates
-                    (append vars gptel-prompts-template-variables)
-                    :test #'string= :from-end t :key #'car))
-         ;; Determine base directory for template resolution
-         (base-dir (or
+(defun gptel-prompts--prepare-template-env (prompt &optional file)
+  "Returns a `template' environment with support for file inclusion and
+inheritance. When `gptel-prompts-template-base-directory' is nil, uses
+the directory of the PROMPT file being interpolated for resolving
+template paths with `expand-file-name'
+
+Can be used to extend the environment with template inheritance,
+filters, and tests."
+  (let* ((base-dir (or ; Determine base directory for template resolution
                     (or
                      (and (functionp gptel-prompts-template-base-directory)
                           (funcall gptel-prompts-template-base-directory
@@ -248,11 +246,23 @@ resolving template paths with `expand-file-name'."
                                (templatel-env-add-template
                                 environment name
                                 (templatel-new-from-file template-path))))))))
+    (mapcar #'(lambda (f) (funcall f env))
+            gptel-prompts-prepare-template-env-functions)
+    env))
+
+(defun gptel-prompts-interpolate (prompt &optional file)
+  "Expand Jinja-style references using a full templatel environment."
+  (require 'templatel)
+  ;; Gather variables from template functions
+  (let* ((vars (apply #'append
+                      (mapcar #'(lambda (f) (funcall f file))
+                              gptel-prompts-template-functions)))
+         (all-vars (cl-remove-duplicates
+                    (append vars gptel-prompts-template-variables)
+                    :test #'string= :from-end t :key #'car))
+         (env (funcall gptel-prompts-get-template-env-function prompt file)))
     ;; Add the main template to the environment and render it
     (templatel-env-add-template env "main" (templatel-new prompt))
-    (when gptel-prompts-template-env-prepare-functions
-      (mapcar #'(lambda (f) (funcall f env))
-              gptel-prompts-template-env-prepare-functions))
     (templatel-env-render env "main" all-vars)))
 
 (defun gptel-prompts-interpolate-buffer ()

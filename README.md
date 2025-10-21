@@ -86,8 +86,13 @@ directory or `default-directory`.
 
 #### Extending Templatel Environment
 
-Extending the `templatel` environment is provided by customizing the variable
-`gptel-prompts-template-env-prepare-functions` with a list of functions, each
+The `templatel` environment can be replaced by customizing the variable
+`gptel-prompts-get-template-env-function` and setting it to a function that
+receives as arguments a prompt and an optional file and returns a `templatel`
+environment.
+
+The default `templatel` environmentd can be extended by customizing the variable
+`gptel-prompts-prepare-template-env-functions` with a list of functions, each
 function receives the `templatel` environment. Here is an example of adding a
 `templatel` filter named `nindent` which indents the string according to the
 provided number of characters `n`, similar to the Helm chart `nindent` filter.
