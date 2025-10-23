@@ -312,6 +312,8 @@ for typed files."
 (defun gptel-prompts-read-directory (dir)
   "Read prompts from directory DIR and establish them in `gptel-directives'."
   (cl-loop for file in (directory-files dir t gptel-prompts-file-regexp)
+           if (not (or (string-prefix-p "#" (file-name-nondirectory file))
+                       (string-prefix-p ".#" (file-name-nondirectory file))))
            collect (cons (intern (file-name-sans-extension
                                   (file-name-nondirectory file)))
                          (gptel-prompts-process-file file))))
