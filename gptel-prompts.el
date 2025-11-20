@@ -437,34 +437,41 @@ markdown files within it will be aggregated into a single prompt."
     (unless (string-empty-p contents)
       contents)))
 
-(defun gptel-prompts-project-conventions ()
+(defun gptel-prompts--project-conventions-read (root)
+  "Return project conventions string for project ROOT.
+Scans `gptel-prompts-project-files' and returns the first matching content,
+or a default system prompt if none found."
+  (cl-loop for item in gptel-prompts-project-files
+           for path = (expand-file-name (if (consp item) (car item) item) root)
+           when (file-readable-p path)
+           return (cond
+                    ((consp item)
+                     (gptel-prompts--read-directory-filtered (car item) (cdr item)))
+                    ((file-directory-p path)
+                     (gptel-prompts--read-directory path))
+                    (t
+                     (with-temp-buffer
+                       (insert-file-contents path)
+                       (buffer-string))))
+           finally (return "You are a helpful assistant. Respond concisely.")))
+
+(defun gptel-prompts-project-conventions (&optional no-cache)
   "System prompt is obtained from project CONVENTIONS.
 This function should be added to `gptel-directives'. To replace
 the default directive, use:
 
   (setf (alist-get \\'default gptel-directives)
-        #\\'gptel-project-conventions)"
+        #\\'gptel-project-conventions)
+
+When NO-CACHE is non-nil, bypasses memoization and reads fresh content."
   (when-let* ((project (project-current))
               (root (project-root project)))
-    (with-memoization
-        (alist-get root gptel-prompts--project-conventions-alist
-                   nil nil #'equal)
-      (or (cl-loop
-           for item in gptel-prompts-project-files
-           for path = (expand-file-name
-                       (if (consp item) (car item) item)
-                       root)
-           when (file-readable-p path)
-           return (cond
-                   ((consp item)
-                    (gptel-prompts--read-directory-filtered (car item) (cdr item)))
-                   ((file-directory-p path)
-                    (gptel-prompts--read-directory path))
-                   (t
-                    (with-temp-buffer
-                      (insert-file-contents path)
-                      (buffer-string)))))
-          "You are a helpful assistant. Respond concisely."))))
+    (if no-cache
+        (gptel-prompts--project-conventions-read root)
+      (with-memoization
+          (alist-get root gptel-prompts--project-conventions-alist
+                     nil nil #'equal)
+        (gptel-prompts--project-conventions-read root)))))
 
 (provide 'gptel-prompts)
 
