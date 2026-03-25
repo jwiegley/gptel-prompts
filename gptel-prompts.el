@@ -5,28 +5,41 @@
 ;; Author: John Wiegley <johnw@gnu.org>
 ;; Created: 19 May 2025
 ;; Version: 1.0
-;; Keywords: ai gptel prompts
-;; X-URL: https://github.com/jwiegley/dot-emacs
-;; Package-Requires: ((emacs "24.1"))
+;; Keywords: convenience
+;; URL: https://github.com/jwiegley/gptel-prompts
+;; Package-Requires: ((emacs "29.1") (gptel "0.9.8.5"))
 
 ;; This file is NOT part of GNU Emacs.
 
 ;;; License:
 
-;; This program is free software; you can redistribute it and/or
-;; modify it under the terms of the GNU General Public License as
-;; published by the Free Software Foundation; either version 2, or (at
-;; your option) any later version.
-
-;; This program is distributed in the hope that it will be useful, but
-;; WITHOUT ANY WARRANTY; without even the implied warranty of
-;; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
-;; General Public License for more details.
-
-;; You should have received a copy of the GNU General Public License
-;; along with GNU Emacs; see the file COPYING.  If not, write to the
-;; Free Software Foundation, Inc., 59 Temple Place - Suite 330,
-;; Boston, MA 02111-1307, USA.
+;; Redistribution and use in source and binary forms, with or without
+;; modification, are permitted provided that the following conditions are
+;; met:
+;;
+;; - Redistributions of source code must retain the above copyright
+;;   notice, this list of conditions and the following disclaimer.
+;;
+;; - Redistributions in binary form must reproduce the above copyright
+;;   notice, this list of conditions and the following disclaimer in the
+;;   documentation and/or other materials provided with the distribution.
+;;
+;; - Neither the name of John Wiegley nor the names of any contributors
+;;   may be used to endorse or promote products derived from this
+;;   software without specific prior written permission.
+;;
+;; THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+;; "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+;; LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+;; A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+;; HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT,
+;; INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING,
+;; BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS
+;; OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED
+;; AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
+;; LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY
+;; WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+;; POSSIBILITY OF SUCH DAMAGE.
 
 ;;; Commentary:
 
@@ -85,17 +98,27 @@
 ;;; Code:
 
 (require 'cl-lib)
-(require 'cl-macs)
 (require 'rx)
 (require 'filenotify)
 (require 'gptel)
+
+(declare-function project-current "project")
+(declare-function project-root "project")
+(declare-function yaml-parse-string "yaml")
+(declare-function yaml--hash-table-to-alist "yaml")
+(declare-function templatel-env-new "templatel")
+(declare-function templatel-env-add-template "templatel")
+(declare-function templatel-env-render "templatel")
+(declare-function templatel-new "templatel")
+(declare-function templatel-new-from-file "templatel")
 
 (defgroup gptel-prompts nil
   "Helper library for managing GPTel prompts (aka directives)."
   :group 'gptel)
 
-(defcustom gptel-prompts-directory "~/.emacs.d/prompts"
-  "*Directory where GPTel prompts are defined, one per file.
+(defcustom gptel-prompts-directory
+  (expand-file-name "prompts" user-emacs-directory)
+  "Directory where GPTel prompts are defined, one per file.
 
 Note that files can be of different types, which will cause them to be
 represented as directives differently. See `gptel-prompts-file-regexp'
@@ -114,7 +137,7 @@ for more information."
                "poet"
                "json"))
       string-end)
-  "*Directory where GPTel prompts are defined, one per file.
+  "Regexp matching supported prompt file extensions.
 
 Note that files can be of different types, which will cause them
 to be represented as directives differently:
@@ -129,7 +152,7 @@ to be represented as directives differently:
   :group 'gptel-prompts)
 
 (defcustom gptel-prompts-template-variables nil
-  "*An alist of names to strings used during template expansion.
+  "An alist of names to strings used during template expansion.
 
 Example:
   ((\"name\" . \"John\")
@@ -142,7 +165,7 @@ prompt template."
 
 (defcustom gptel-prompts-template-functions
   '(gptel-prompts-add-current-time)
-  "*Set of functions run when a template prompt is used.
+  "Set of functions run when a template prompt is used.
 
 These are called when the template is going to be used by
 `gptel-request'. Each function receives the name of the template file,
@@ -246,8 +269,8 @@ filters, and tests."
                                (templatel-env-add-template
                                 environment name
                                 (templatel-new-from-file template-path))))))))
-    (mapcar #'(lambda (f) (funcall f env))
-            gptel-prompts-prepare-template-env-functions)
+    (mapc #'(lambda (f) (funcall f env))
+          gptel-prompts-prepare-template-env-functions)
     env))
 
 (defun gptel-prompts-interpolate (prompt &optional file)
@@ -445,14 +468,14 @@ or a default system prompt if none found."
            for path = (expand-file-name (if (consp item) (car item) item) root)
            when (file-readable-p path)
            return (cond
-                    ((consp item)
-                     (gptel-prompts--read-directory-filtered (car item) (cdr item)))
-                    ((file-directory-p path)
-                     (gptel-prompts--read-directory path))
-                    (t
-                     (with-temp-buffer
-                       (insert-file-contents path)
-                       (buffer-string))))
+                   ((consp item)
+                    (gptel-prompts--read-directory-filtered (car item) (cdr item)))
+                   ((file-directory-p path)
+                    (gptel-prompts--read-directory path))
+                   (t
+                    (with-temp-buffer
+                      (insert-file-contents path)
+                      (buffer-string))))
            finally (return "You are a helpful assistant. Respond concisely.")))
 
 (defun gptel-prompts-project-conventions (&optional no-cache)

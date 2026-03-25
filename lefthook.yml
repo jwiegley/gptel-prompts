@@ -1,0 +1,27 @@
+pre-commit:
+  parallel: true
+  commands:
+    byte-compile:
+      glob: "*.el"
+      run: emacs --batch -L . --eval "(setq byte-compile-error-on-warn t)" -f batch-byte-compile gptel-prompts.el
+    package-lint:
+      glob: "*.el"
+      run: emacs --batch -L . --eval "(require 'package-lint)" -f package-lint-batch-and-exit gptel-prompts.el
+    format-check:
+      glob: "*.el"
+      run: scripts/check-format.sh {staged_files}
+    test:
+      glob: "*.el"
+      run: emacs --batch -L . -L test -l ert -l gptel-prompts-test -f ert-run-tests-batch-and-exit
+    fuzz:
+      glob: "*.el"
+      run: emacs --batch -L . -L test -l ert -l gptel-prompts-fuzz -f ert-run-tests-batch-and-exit
+    coverage-check:
+      glob: "*.el"
+      run: scripts/check-coverage.sh
+    benchmark-check:
+      glob: "*.el"
+      run: scripts/check-benchmark.sh
+    nix-check:
+      glob: "*.{el,nix}"
+      run: nix flake check --no-warn-dirty 2>&1
