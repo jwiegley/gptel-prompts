@@ -362,7 +362,7 @@ for typed files."
   "Read prompts from directory DIR and establish them in `gptel-directives'."
   (cl-loop for file in (directory-files dir t gptel-prompts-file-regexp)
            if (not (or (string-prefix-p "#" (file-name-nondirectory file))
-                       (string-prefix-p ".#" (file-name-nondirectory file))))
+                       (string-prefix-p "." (file-name-nondirectory file))))
            collect (cons (intern (file-name-sans-extension
                                   (file-name-nondirectory file)))
                          (gptel-prompts-process-file file))))
@@ -388,7 +388,9 @@ for typed files."
                             (gptel-prompts-update))))))
     (dolist (file (directory-files gptel-prompts-directory
                                    t gptel-prompts-file-regexp))
-      (when (file-regular-p file)
+      (when (and (file-regular-p file)
+                 (not (or (string-prefix-p "#" (file-name-nondirectory file))
+                          (string-prefix-p "." (file-name-nondirectory file)))))
         (push (file-notify-add-watch file '(change)
                                      #'(lambda (&rest _events)
                                          (gptel-prompts-update)))
