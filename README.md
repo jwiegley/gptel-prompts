@@ -26,6 +26,35 @@ Put your prompt files in `gptel-prompts-directory` (defaults to
 `"~/.emacs.d/prompts"`), and you're done. Whenever files change,
 `gptel-prompts-update` refreshes `gptel-directives` automatically.
 
+## Organizing prompts in subdirectories
+
+By default, only the files directly inside `gptel-prompts-directory` are
+loaded. If you'd rather organize your prompts hierarchically, set
+`gptel-prompts-recursive` and the directory will be searched recursively:
+
+```elisp
+(setopt gptel-prompts-recursive t)
+```
+
+Prompts found in subdirectories are named by their relative path, so with a
+layout like this:
+
+```
+~/.emacs.d/prompts/
+├── elisp/
+│   └── refactor.md
+└── python/
+    └── pro.md
+```
+
+you get directives named `elisp/refactor` and `python/pro`. Files and
+directories whose names start with `.` or `#` are skipped.
+
+`gptel-prompts-add-update-watchers` watches the subdirectories that exist
+when you call it, so changes to nested prompts are picked up automatically.
+If you create a brand-new subdirectory later, call it again (or run
+`gptel-prompts-update` manually) to cover the new contents.
+
 ## Prompt formats
 
 Each file in the prompts directory becomes a named directive. The filename (sans
