@@ -151,6 +151,17 @@ to be represented as directives differently:
   :type 'regexp
   :group 'gptel-prompts)
 
+(defcustom gptel-prompts-recursive nil
+  "If non-nil, search `gptel-prompts-directory' recursively for prompts.
+When enabled, prompt files found in subdirectories are also loaded,
+and their directive names include the path relative to
+`gptel-prompts-directory', without the file extension.  For example,
+the file \"elisp/refactor.md\" produces a directive named
+`elisp/refactor'.  Files and directories whose names begin with \".\"
+or \"#\" are always ignored."
+  :type 'boolean
+  :group 'gptel-prompts)
+
 (defcustom gptel-prompts-template-variables nil
   "An alist of names to strings used during template expansion.
 
@@ -366,12 +377,43 @@ This applies to files and directories whose base name begins with
     (or (string-prefix-p "#" base)
         (string-prefix-p "." base))))
 
+(defun gptel-prompts--directory-files (dir)
+  "Return prompt files in DIR matching `gptel-prompts-file-regexp'.
+When `gptel-prompts-recursive' is non-nil, files in subdirectories of
+DIR are included as well, skipping ignored directories (see
+`gptel-prompts--ignored-p')."
+  (if gptel-prompts-recursive
+      (directory-files-recursively
+       dir gptel-prompts-file-regexp nil
+       #'(lambda (subdir)
+           (and (not (gptel-prompts--ignored-p subdir))
+                (file-accessible-directory-p subdir))))
+    (directory-files dir t gptel-prompts-file-regexp)))
+
+(defun gptel-prompts--subdirectories (dir)
+  "Return all subdirectories of DIR, recursively.
+Ignored, symlinked, and inaccessible directories are skipped (see
+`gptel-prompts--ignored-p'), matching the directories that
+`gptel-prompts--directory-files' descends into."
+  (let (result)
+    (dolist (entry (directory-files dir t directory-files-no-dot-files-regexp t))
+      (when (and (file-directory-p entry)
+                 (not (file-symlink-p entry))
+                 (not (gptel-prompts--ignored-p entry))
+                 (file-accessible-directory-p entry))
+        (push entry result)
+        (setq result (nconc (gptel-prompts--subdirectories entry) result))))
+    result))
+
 (defun gptel-prompts-read-directory (dir)
-  "Read prompts from directory DIR and establish them in `gptel-directives'."
-  (cl-loop for file in (directory-files dir t gptel-prompts-file-regexp)
+  "Read prompts from directory DIR and establish them in `gptel-directives'.
+When `gptel-prompts-recursive' is non-nil, prompts are also read from
+subdirectories of DIR, and their directive names include the relative
+path: \"elisp/refactor.md\" becomes the directive `elisp/refactor'."
+  (cl-loop for file in (gptel-prompts--directory-files dir)
            unless (gptel-prompts--ignored-p file)
            collect (cons (intern (file-name-sans-extension
-                                  (file-name-nondirectory file)))
+                                  (file-relative-name file dir)))
                          (gptel-prompts-process-file file))))
 
 (defun gptel-prompts-update ()
@@ -389,13 +431,20 @@ This applies to files and directories whose base name begins with
 
 (defun gptel-prompts-add-update-watchers ()
   "Watch all prompt files, updating `gptel-directives' on any change.
-Return the list of file-notify descriptors for the added watches."
+Return the list of file-notify descriptors for the added watches.
+When `gptel-prompts-recursive' is non-nil, subdirectories of
+`gptel-prompts-directory' are watched as well."
   (let ((watches (list (file-notify-add-watch
                         gptel-prompts-directory '(change)
                         #'(lambda (&rest _events)
                             (gptel-prompts-update))))))
-    (dolist (file (directory-files gptel-prompts-directory
-                                   t gptel-prompts-file-regexp))
+    (when gptel-prompts-recursive
+      (dolist (subdir (gptel-prompts--subdirectories gptel-prompts-directory))
+        (push (file-notify-add-watch subdir '(change)
+                                     #'(lambda (&rest _events)
+                                         (gptel-prompts-update)))
+              watches)))
+    (dolist (file (gptel-prompts--directory-files gptel-prompts-directory))
       (when (and (file-regular-p file)
                  (not (gptel-prompts--ignored-p file)))
         (push (file-notify-add-watch file '(change)

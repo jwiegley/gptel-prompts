@@ -248,6 +248,172 @@
             (should (listp (alist-get 'data result)))))
       (delete-directory temp-dir t))))
 
+;;; gptel-prompts-read-directory (recursive)
+
+(ert-deftest gptel-prompts-test-read-directory-not-recursive-by-default ()
+  "Subdirectory prompts are ignored when `gptel-prompts-recursive' is nil."
+  (let ((temp-dir (make-temp-file "gptel-test-dir" t))
+        (gptel-prompts-recursive nil))
+    (unwind-protect
+        (progn
+          (with-temp-file (expand-file-name "top.txt" temp-dir)
+            (insert "Top level"))
+          (make-directory (expand-file-name "sub" temp-dir))
+          (with-temp-file (expand-file-name "sub/nested.txt" temp-dir)
+            (insert "Nested"))
+          (let ((result (gptel-prompts-read-directory temp-dir)))
+            (should (= (length result) 1))
+            (should (equal (alist-get 'top result) "Top level"))))
+      (delete-directory temp-dir t))))
+
+(ert-deftest gptel-prompts-test-read-directory-recursive ()
+  "Prompts in subdirectories are named by their relative paths.
+This is the scenario described in issue #17."
+  (let ((temp-dir (make-temp-file "gptel-test-dir" t))
+        (gptel-prompts-recursive t))
+    (unwind-protect
+        (progn
+          (make-directory (expand-file-name "elisp" temp-dir))
+          (with-temp-file (expand-file-name "elisp/refactor.el" temp-dir)
+            (insert "(lambda () \"You are an advanced Emacs Lisp developer\")"))
+          (make-directory (expand-file-name "python" temp-dir))
+          (with-temp-file (expand-file-name "python/pro.md" temp-dir)
+            (insert "You're an advanced Python developer."))
+          (let ((result (gptel-prompts-read-directory temp-dir)))
+            (should (= (length result) 2))
+            (should (functionp (alist-get 'elisp/refactor result)))
+            (should (equal (alist-get 'python/pro result)
+                           "You're an advanced Python developer."))))
+      (delete-directory temp-dir t))))
+
+(ert-deftest gptel-prompts-test-read-directory-recursive-deeply-nested ()
+  "Deeply nested prompts include the full relative path in their names."
+  (let ((temp-dir (make-temp-file "gptel-test-dir" t))
+        (gptel-prompts-recursive t))
+    (unwind-protect
+        (progn
+          (make-directory (expand-file-name "a/b" temp-dir) t)
+          (with-temp-file (expand-file-name "a/b/c.txt" temp-dir)
+            (insert "Deep"))
+          (let ((result (gptel-prompts-read-directory temp-dir)))
+            (should (equal (alist-get 'a/b/c result) "Deep"))))
+      (delete-directory temp-dir t))))
+
+(ert-deftest gptel-prompts-test-read-directory-recursive-top-level-names ()
+  "Top-level prompts keep their plain names in recursive mode."
+  (let ((temp-dir (make-temp-file "gptel-test-dir" t))
+        (gptel-prompts-recursive t))
+    (unwind-protect
+        (progn
+          (with-temp-file (expand-file-name "greeting.txt" temp-dir)
+            (insert "Hello!"))
+          (let ((result (gptel-prompts-read-directory temp-dir)))
+            (should (= (length result) 1))
+            (should (equal (alist-get 'greeting result) "Hello!"))))
+      (delete-directory temp-dir t))))
+
+(ert-deftest gptel-prompts-test-read-directory-recursive-skips-hidden-dirs ()
+  "Hidden directories are not descended into in recursive mode."
+  (let ((temp-dir (make-temp-file "gptel-test-dir" t))
+        (gptel-prompts-recursive t))
+    (unwind-protect
+        (progn
+          (with-temp-file (expand-file-name "visible.txt" temp-dir)
+            (insert "Visible"))
+          (make-directory (expand-file-name ".hidden" temp-dir))
+          (with-temp-file (expand-file-name ".hidden/secret.txt" temp-dir)
+            (insert "Hidden"))
+          (let ((result (gptel-prompts-read-directory temp-dir)))
+            (should (= (length result) 1))
+            (should (equal (alist-get 'visible result) "Visible"))))
+      (delete-directory temp-dir t))))
+
+(ert-deftest gptel-prompts-test-read-directory-recursive-skips-autosave ()
+  "Autosave and lock files in subdirectories are skipped."
+  (let ((temp-dir (make-temp-file "gptel-test-dir" t))
+        (gptel-prompts-recursive t))
+    (unwind-protect
+        (progn
+          (make-directory (expand-file-name "sub" temp-dir))
+          (with-temp-file (expand-file-name "sub/good.txt" temp-dir)
+            (insert "Keep me"))
+          (with-temp-file (expand-file-name "sub/#autosave.txt" temp-dir)
+            (insert "Skip me"))
+          (with-temp-file (expand-file-name "sub/.#lock.txt" temp-dir)
+            (insert "Skip me too"))
+          (let ((result (gptel-prompts-read-directory temp-dir)))
+            (should (= (length result) 1))
+            (should (equal (alist-get 'sub/good result) "Keep me"))))
+      (delete-directory temp-dir t))))
+
+(ert-deftest gptel-prompts-test-subdirectories ()
+  "Subdirectory listing recurses and skips hidden directories."
+  (let ((temp-dir (make-temp-file "gptel-test-dir" t)))
+    (unwind-protect
+        (progn
+          (make-directory (expand-file-name "a/b" temp-dir) t)
+          (make-directory (expand-file-name ".hidden" temp-dir))
+          (let ((result (gptel-prompts--subdirectories temp-dir)))
+            (should (= (length result) 2))
+            (should (member (expand-file-name "a" temp-dir) result))
+            (should (member (expand-file-name "a/b" temp-dir) result))))
+      (delete-directory temp-dir t))))
+
+(ert-deftest gptel-prompts-test-subdirectories-skips-symlinks ()
+  "Symlinked directories are not followed when collecting subdirectories."
+  (let ((temp-dir (make-temp-file "gptel-test-dir" t)))
+    (unwind-protect
+        (progn
+          (make-directory (expand-file-name "real" temp-dir))
+          (make-symbolic-link temp-dir (expand-file-name "loop" temp-dir))
+          (let ((result (gptel-prompts--subdirectories temp-dir)))
+            (should (equal result (list (expand-file-name "real" temp-dir))))))
+      (delete-directory temp-dir t))))
+
+;;; gptel-prompts-add-update-watchers
+
+(ert-deftest gptel-prompts-test-add-update-watchers-recursive ()
+  "Watchers are registered for subdirectories in recursive mode."
+  (let* ((temp-dir (make-temp-file "gptel-test-dir" t))
+         (gptel-prompts-recursive t)
+         (gptel-prompts-directory temp-dir)
+         (watched nil))
+    (unwind-protect
+        (progn
+          (make-directory (expand-file-name "sub" temp-dir))
+          (with-temp-file (expand-file-name "sub/prompt.txt" temp-dir)
+            (insert "Nested"))
+          (let ((stub (lambda (file _flags _callback)
+                        (push file watched)
+                        (gensym))))
+            (advice-add 'file-notify-add-watch :override stub)
+            (unwind-protect
+                (gptel-prompts-add-update-watchers)
+              (advice-remove 'file-notify-add-watch stub)))
+          (should (member temp-dir watched))
+          (should (member (expand-file-name "sub" temp-dir) watched))
+          (should (member (expand-file-name "sub/prompt.txt" temp-dir)
+                          watched)))
+      (delete-directory temp-dir t))))
+
+;;; gptel-prompts-update (recursive)
+
+(ert-deftest gptel-prompts-test-update-recursive ()
+  "Update establishes relative-path directives from subdirectories."
+  (let* ((temp-dir (make-temp-file "gptel-test-dir" t))
+         (gptel-prompts-recursive t)
+         (gptel-prompts-directory temp-dir)
+         (gptel-directives nil))
+    (unwind-protect
+        (progn
+          (make-directory (expand-file-name "elisp" temp-dir))
+          (with-temp-file (expand-file-name "elisp/refactor.md" temp-dir)
+            (insert "Refactor prompt"))
+          (gptel-prompts-update)
+          (should (equal (alist-get 'elisp/refactor gptel-directives)
+                         "Refactor prompt")))
+      (delete-directory temp-dir t))))
+
 ;;; gptel-prompts-add-current-time
 
 (ert-deftest gptel-prompts-test-add-current-time ()
