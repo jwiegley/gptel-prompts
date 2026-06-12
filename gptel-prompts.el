@@ -358,11 +358,18 @@ for typed files."
            (insert-file-contents file)
            (string-trim (buffer-string))))))
 
+(defun gptel-prompts--ignored-p (file)
+  "Return non-nil if FILE should be ignored when loading prompts.
+This applies to files and directories whose base name begins with
+\"#\" or \".\", such as autosave, lock, and hidden files."
+  (let ((base (file-name-nondirectory (directory-file-name file))))
+    (or (string-prefix-p "#" base)
+        (string-prefix-p "." base))))
+
 (defun gptel-prompts-read-directory (dir)
   "Read prompts from directory DIR and establish them in `gptel-directives'."
   (cl-loop for file in (directory-files dir t gptel-prompts-file-regexp)
-           if (not (or (string-prefix-p "#" (file-name-nondirectory file))
-                       (string-prefix-p "." (file-name-nondirectory file))))
+           unless (gptel-prompts--ignored-p file)
            collect (cons (intern (file-name-sans-extension
                                   (file-name-nondirectory file)))
                          (gptel-prompts-process-file file))))
@@ -381,7 +388,8 @@ for typed files."
   `(("current_time" . ,(format-time-string "%F %T"))))
 
 (defun gptel-prompts-add-update-watchers ()
-  "Watch all files in DIR and run CALLBACK when any is modified."
+  "Watch all prompt files, updating `gptel-directives' on any change.
+Return the list of file-notify descriptors for the added watches."
   (let ((watches (list (file-notify-add-watch
                         gptel-prompts-directory '(change)
                         #'(lambda (&rest _events)
@@ -389,8 +397,7 @@ for typed files."
     (dolist (file (directory-files gptel-prompts-directory
                                    t gptel-prompts-file-regexp))
       (when (and (file-regular-p file)
-                 (not (or (string-prefix-p "#" (file-name-nondirectory file))
-                          (string-prefix-p "." (file-name-nondirectory file)))))
+                 (not (gptel-prompts--ignored-p file)))
         (push (file-notify-add-watch file '(change)
                                      #'(lambda (&rest _events)
                                          (gptel-prompts-update)))
